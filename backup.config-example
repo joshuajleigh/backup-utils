@@ -48,3 +48,8 @@ GHE_NUM_SNAPSHOTS=10
 #
 # WARNING: do not enable this, only useful for debugging/development
 #GHE_BACKUP_FSCK=no
+
+# If set to 'yes', the backup utilities will connect directly to cluster nodes
+# as required, rather than tunnelling everything though the host configured at
+# GHE_HOSTNAME. This setting is only relevant if using GitHub Enterprise cluster.
+#GHE_SSH_DIRECT=yes

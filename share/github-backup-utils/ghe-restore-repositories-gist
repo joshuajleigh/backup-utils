@@ -43,7 +43,6 @@ host=$(ssh_host_part "$GHE_HOSTNAME")
 user="${host%@*}"
 [ "$user" = "$host" ] && user="admin"
 
-hostnames=$host
 tempdir=$(mktemp -d -t backup-utils-restore-XXXXXX)
 remote_tempdir=$(ghe-ssh "$GHE_HOSTNAME" -- mktemp -d -t backup-utils-restore-XXXXXX)
 ssh_config_file_opt=
@@ -58,9 +57,7 @@ remote_routes_list=$remote_tempdir/remote_routes_list
 if $CLUSTER; then
   ssh_config_file="$tempdir/ssh_config"
   ssh_config_file_opt="-F $ssh_config_file"
-  opts="$opts -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o PasswordAuthentication=no"
-  hostnames=$(ghe-cluster-nodes "$GHE_HOSTNAME" "git-server")
-  ghe-ssh-config "$GHE_HOSTNAME" "$hostnames" > "$ssh_config_file"
+  ghe-ssh-config > "$ssh_config_file"
 fi
 
 cleanup() {

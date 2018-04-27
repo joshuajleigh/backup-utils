@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#/ Usage: ghe-ssh-config <proxy_host> [<host>...]
+#/ Usage: ghe-ssh-config
 #/
 #/ Returns a SSH configuration file.
 #/
@@ -7,31 +7,33 @@
 #/ ghe-[backup|restore]-* commands.
 set -e
 
-# Bring in the backup configuration
-# shellcheck source=share/github-backup-utils/ghe-backup-config
-. "$( dirname "${BASH_SOURCE[0]}" )/ghe-backup-config"
+export GIT_CONFIG_NOSYSTEM=1
 
-# Show usage and bail with no arguments
-[ -z "$*" ] && print_usage
+if [ -z "$GIT_CONFIG" ]; then
+   if [ -f "$GHE_SNAPSHOT_DIR/cluster.conf" ]; then
+     export GIT_CONFIG="$GHE_SNAPSHOT_DIR/cluster.conf"
+   else
+     echo "ERROR: cluster.conf is required to generate the SSH configuration."
+     exit 1
+   fi
+fi
 
-GHE_HOSTNAME="$1"
-shift
+hosts=$(git config --get-regexp cluster.*.hostname | cut -d ' ' -f2)
 
-hosts="$*"
+for hostname in $hosts; do
+  if [ -n "$(git config cluster.$hostname.ipv6)" ]; then
+    ip=$(git config "cluster.$hostname.ipv6")
+  elif [ -n "$(git config cluster.$hostname.ipv4)" ]; then
+    ip=$(git config "cluster.$hostname.ipv4")
+  fi
 
-proxy_host=$(ssh_host_part "$GHE_HOSTNAME")
-proxy_port=$(ssh_port_part "$GHE_HOSTNAME")
-proxy_user="${proxy_host%@*}"
-[ "$proxy_user" = "$proxy_host" ] && proxy_user="admin"
+  uuid=$(git config "cluster.$hostname.uuid" || true)
 
-opts="$GHE_EXTRA_SSH_OPTS"
-
-[ -z "$GHE_DISABLE_SSH_MUX" ] && opts="-o ControlMaster=auto -o ControlPath=\"$TMPDIR/.ghe-sshmux-$(echo -n "$proxy_user@$proxy_host:$proxy_port" | git hash-object --stdin | cut -c 1-8)\" -o ControlPersist=10m -o ServerAliveInterval=10 $opts"
-
-for host in $hosts; do
-  cat <<EOF
-Host $host
-  ProxyCommand ssh -q $opts -p $proxy_port $proxy_user@$proxy_host nc.openbsd %h %p
-  StrictHostKeyChecking=no
-EOF
+  echo "Host git-server-$uuid pages-server-$uuid storage-server-$uuid"
+  if [ "$GHE_SSH_DIRECT" = "yes" ]; then
+    echo "  HostName $ip"
+  else
+    echo "  ProxyCommand ghe-ssh $GHE_HOSTNAME -- nc.openbsd %h %p"
+  fi
+  echo "  StrictHostKeyChecking=no"
 done
